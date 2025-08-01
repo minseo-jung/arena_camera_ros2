@@ -232,8 +232,10 @@ void FrameBurstNode::publish_burst_images_()
 
       images_received++;
       log_info(std::string("Burst image ") + std::to_string(images_received) + 
-               " (Frame ID: " + std::to_string(pImage->GetFrameId()) + 
-               ") published to " + topic_);
+          " (Frame ID: " + std::to_string(pImage->GetFrameId()) + 
+          ", Size: " + std::to_string(pImage->GetWidth()) + "x" + std::to_string(pImage->GetHeight()) +
+          ", Format: " + std::string(Arena::GetNodeValue<GenICam::gcstring>(m_pDevice->GetNodeMap(), "PixelFormat")) +
+          ") published to " + topic_);
       
       this->m_pDevice->RequeueBuffer(pImage);
 
@@ -275,7 +277,7 @@ void FrameBurstNode::msg_form_image_(Arena::IImage* pImage,
         static_cast<uint32_t>(pImage->GetTimestampNs() / 1000000000);
     image_msg.header.stamp.nanosec =
         static_cast<uint32_t>(pImage->GetTimestampNs() % 1000000000);
-    image_msg.header.frame_id = "camera_frame";  // Use consistent frame_id for RViz
+    image_msg.header.frame_id = std::to_string(pImage->GetFrameId());
 
     // 2 ) Height
     image_msg.height = height_;

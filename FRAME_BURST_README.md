@@ -75,7 +75,7 @@ ros2 run arena_camera_node frame_burst --ros-args \
 
 ### 5. Image 저장
 ```
-  ros2 run arena_camera_node frame_burst --ros-args -p software_trigger:=false -p hardware_trigger:=true -p burst_frame_count:=10 -p frame_rate:=10.0 -p save_img_folder:="/home/ailab/burst_images"
+  ros2 run arena_camera_node frame_burst --ros-args -p software_trigger:=false -p hardware_trigger:=true -p burst_frame_count:=10 -p frame_rate:=20.0 -p save_img_folder:="/home/ailab/burst_images"
 
 ``` 
 

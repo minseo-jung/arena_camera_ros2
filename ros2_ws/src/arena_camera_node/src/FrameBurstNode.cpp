@@ -272,6 +272,23 @@ void FrameBurstNode::msg_form_image_(Arena::IImage* pImage,
                                       sensor_msgs::msg::Image& image_msg)
 {
   try {
+    // Debug: Log image properties from camera
+    auto actual_width = pImage->GetWidth();
+    auto actual_height = pImage->GetHeight();
+    log_info("=== DEBUG: Image properties ===");
+    log_info(std::string("Camera image size: ") + std::to_string(actual_width) + "x" + std::to_string(actual_height));
+    log_info(std::string("Parameter size: ") + std::to_string(width_) + "x" + std::to_string(height_));
+    log_info(std::string("Bits per pixel: ") + std::to_string(pImage->GetBitsPerPixel()));
+    log_info(std::string("Image data size: ") + std::to_string(pImage->GetSizeFilled()) + " bytes");
+    
+    // Check first few bytes of image data
+    auto* imageData = static_cast<const uint8_t*>(pImage->GetData());
+    std::string firstBytes = "First 10 bytes: ";
+    for (int i = 0; i < std::min(10, (int)pImage->GetSizeFilled()); i++) {
+      firstBytes += std::to_string(imageData[i]) + " ";
+    }
+    log_info(firstBytes);
+    
     // 1 ) Header
     image_msg.header.stamp.sec =
         static_cast<uint32_t>(pImage->GetTimestampNs() / 1000000000);
@@ -303,6 +320,10 @@ void FrameBurstNode::msg_form_image_(Arena::IImage* pImage,
     image_msg.data.resize(image_data_length_in_bytes);
     std::memcpy(&image_msg.data[0], pImage->GetData(),
                 image_data_length_in_bytes);
+
+    log_info(std::string("ROS image message: ") + std::to_string(image_msg.width) + "x" + 
+             std::to_string(image_msg.height) + ", step=" + std::to_string(image_msg.step) + 
+             ", data_size=" + std::to_string(image_msg.data.size()));
 
   } catch (...) {
     log_warn(
@@ -495,6 +516,22 @@ void FrameBurstNode::set_nodes_frame_burst_trigger_mode_()
 {
   auto nodemap = m_pDevice->GetNodeMap();
   
+  // Debug: Log current camera state before changes
+  log_info("=== DEBUG: Camera state before Frame Burst setup ===");
+  try {
+    auto current_trigger_mode = Arena::GetNodeValue<GenICam::gcstring>(nodemap, "TriggerMode");
+    auto current_pixel_format = Arena::GetNodeValue<GenICam::gcstring>(nodemap, "PixelFormat");
+    auto current_width = Arena::GetNodeValue<int64_t>(nodemap, "Width");
+    auto current_height = Arena::GetNodeValue<int64_t>(nodemap, "Height");
+    
+    log_info(std::string("Current TriggerMode: ") + std::string(current_trigger_mode));
+    log_info(std::string("Current PixelFormat: ") + std::string(current_pixel_format));
+    log_info(std::string("Current Width: ") + std::to_string(current_width));
+    log_info(std::string("Current Height: ") + std::to_string(current_height));
+  } catch (GenICam::GenericException& e) {
+    log_warn(std::string("Failed to read current camera state: ") + e.what());
+  }
+  
   // Enable trigger mode
   Arena::SetNodeValue<GenICam::gcstring>(nodemap, "TriggerMode", "On");
   
@@ -525,5 +562,21 @@ void FrameBurstNode::set_nodes_frame_burst_trigger_mode_()
              std::to_string(burst_frame_count_) + " frames)");
     log_info(std::string("\tTo trigger burst, call service: ros2 service call /") + 
              this->get_name() + "/trigger_burst std_srvs/srv/Trigger");
+  }
+  
+  // Debug: Log final camera state after changes
+  log_info("=== DEBUG: Camera state after Frame Burst setup ===");
+  try {
+    auto final_trigger_mode = Arena::GetNodeValue<GenICam::gcstring>(nodemap, "TriggerMode");
+    auto final_trigger_selector = Arena::GetNodeValue<GenICam::gcstring>(nodemap, "TriggerSelector");
+    auto final_trigger_source = Arena::GetNodeValue<GenICam::gcstring>(nodemap, "TriggerSource");
+    auto final_burst_count = Arena::GetNodeValue<int64_t>(nodemap, "AcquisitionBurstFrameCount");
+    
+    log_info(std::string("Final TriggerMode: ") + std::string(final_trigger_mode));
+    log_info(std::string("Final TriggerSelector: ") + std::string(final_trigger_selector));
+    log_info(std::string("Final TriggerSource: ") + std::string(final_trigger_source));
+    log_info(std::string("Final AcquisitionBurstFrameCount: ") + std::to_string(final_burst_count));
+  } catch (GenICam::GenericException& e) {
+    log_warn(std::string("Failed to read final camera state: ") + e.what());
   }
 }

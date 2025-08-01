@@ -154,6 +154,37 @@ install(TARGETS
 
 # -----------------------------------------------------------------------------
 #
+# ROS2 RUN FRAME_BURST_NODE <>
+#
+# -----------------------------------------------------------------------------
+
+set(frame_burst_target frame_burst)
+
+# CPP DEPS
+add_executable(${frame_burst_target}
+    src/frame_burst_main.cpp
+    src/FrameBurstNode.cpp
+    src/light_arena/deviceinfo_helper.cpp
+    src/rclcpp_adapter/pixelformat_translation.cpp
+    src/rclcpp_adapter/quilty_of_service_translation.cpp
+)
+
+# ROS DEP
+ament_target_dependencies(${frame_burst_target}  rclcpp 
+                                          std_msgs 
+                                          std_srvs
+                                          sensor_msgs
+                                          arena_sdk
+                                          )
+
+# MV EXEC to lib dir
+install(TARGETS
+  ${frame_burst_target} 
+    DESTINATION lib/${PROJECT_NAME}
+)
+
+# -----------------------------------------------------------------------------
+#
 # ROS2 RUN TRIGGER_IMAGE <>
 #
 # -----------------------------------------------------------------------------

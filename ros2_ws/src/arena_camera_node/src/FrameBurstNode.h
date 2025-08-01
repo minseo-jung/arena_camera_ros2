@@ -68,6 +68,7 @@ class FrameBurstNode : public rclcpp::Node
   bool is_passed_pixelformat_ros_;
 
   // Frame Burst specific parameters
+  bool trigger_mode_activated_;
   bool hardware_trigger_;
   bool software_trigger_;
   int burst_frame_count_;
@@ -83,6 +84,10 @@ class FrameBurstNode : public rclcpp::Node
 
   std::string pub_qos_reliability_;
   bool is_passed_pub_qos_reliability_;
+
+  // Image saving parameters
+  std::string save_img_folder_;
+  bool is_passed_save_img_folder_;
 
   void parse_parameters_();
   void initialize_();
@@ -105,4 +110,10 @@ class FrameBurstNode : public rclcpp::Node
       std::shared_ptr<std_srvs::srv::Trigger::Response> response);
   void msg_form_image_(Arena::IImage* pImage,
                        sensor_msgs::msg::Image& image_msg);
+
+  // Image saving functions
+  void save_image_to_file_(Arena::IImage* pImage, const sensor_msgs::msg::Image& image_msg);
+  void save_as_ppm_(const std::string& filename, Arena::IImage* pImage);
+  void save_as_pgm_(const std::string& filename, Arena::IImage* pImage);
+  void save_as_raw_(const std::string& filename, Arena::IImage* pImage);
 };

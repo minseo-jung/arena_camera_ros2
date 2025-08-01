@@ -1,6 +1,9 @@
 #include <cstring>    // memcopy
 #include <stdexcept>  // std::runtime_err
 #include <string>
+#include <filesystem> // for directory creation
+#include <fstream>    // for file writing
+#include <iomanip>    // for formatting
 
 // ROS
 #include "rmw/types.h"
@@ -56,7 +59,7 @@ void FrameBurstNode::parse_parameters_()
     burst_frame_count_ = this->declare_parameter("burst_frame_count", 10);
 
     nextParameterToDeclare = "user_set";
-    user_set_ = this->declare_parameter("user_set", "UserSet1");
+    user_set_ = this->declare_parameter("user_set", "Default");
     is_passed_user_set_ = user_set_ != "Default";
 
     nextParameterToDeclare = "topic";
@@ -74,6 +77,14 @@ void FrameBurstNode::parse_parameters_()
     nextParameterToDeclare = "qos_reliability";
     pub_qos_reliability_ = this->declare_parameter("qos_reliability", "");
     is_passed_pub_qos_reliability_ = pub_qos_reliability_ != "";
+
+    nextParameterToDeclare = "trigger_mode";
+    trigger_mode_activated_ = this->declare_parameter("trigger_mode", true);
+
+    nextParameterToDeclare = "save_img_folder";
+    save_img_folder_ = this->declare_parameter("save_img_folder", "");
+    is_passed_save_img_folder_ = (save_img_folder_ != "");
+    std::cout << "Save image folder: " << save_img_folder_ << "bool: "<< (save_img_folder_ != "") <<std::endl;
 
   } catch (rclcpp::ParameterTypeException& e) {
     log_err(nextParameterToDeclare + " argument");
@@ -231,11 +242,11 @@ void FrameBurstNode::publish_burst_images_()
       m_pub_->publish(std::move(p_image_msg));
 
       images_received++;
-      log_info(std::string("Burst image ") + std::to_string(images_received) + 
-          " (Frame ID: " + std::to_string(pImage->GetFrameId()) + 
-          ", Size: " + std::to_string(pImage->GetWidth()) + "x" + std::to_string(pImage->GetHeight()) +
-          ", Format: " + std::string(Arena::GetNodeValue<GenICam::gcstring>(m_pDevice->GetNodeMap(), "PixelFormat")) +
-          ") published to " + topic_);
+      // log_info(std::string("Burst image ") + std::to_string(images_received) + 
+      //     " (Frame ID: " + std::to_string(pImage->GetFrameId()) + 
+      //     ", Size: " + std::to_string(pImage->GetWidth()) + "x" + std::to_string(pImage->GetHeight()) +
+      //     ", Format: " + std::string(Arena::GetNodeValue<GenICam::gcstring>(m_pDevice->GetNodeMap(), "PixelFormat")) +
+      //     ") published to " + topic_);
       
       this->m_pDevice->RequeueBuffer(pImage);
 
@@ -275,19 +286,14 @@ void FrameBurstNode::msg_form_image_(Arena::IImage* pImage,
     // Debug: Log image properties from camera
     auto actual_width = pImage->GetWidth();
     auto actual_height = pImage->GetHeight();
-    log_info("=== DEBUG: Image properties ===");
-    log_info(std::string("Camera image size: ") + std::to_string(actual_width) + "x" + std::to_string(actual_height));
-    log_info(std::string("Parameter size: ") + std::to_string(width_) + "x" + std::to_string(height_));
-    log_info(std::string("Bits per pixel: ") + std::to_string(pImage->GetBitsPerPixel()));
-    log_info(std::string("Image data size: ") + std::to_string(pImage->GetSizeFilled()) + " bytes");
-    
+   
     // Check first few bytes of image data
     auto* imageData = static_cast<const uint8_t*>(pImage->GetData());
-    std::string firstBytes = "First 10 bytes: ";
-    for (int i = 0; i < std::min(10, (int)pImage->GetSizeFilled()); i++) {
-      firstBytes += std::to_string(imageData[i]) + " ";
-    }
-    log_info(firstBytes);
+    // std::string firstBytes = "First 10 bytes: ";
+    // for (int i = 0; i < std::min(10, (int)pImage->GetSizeFilled()); i++) {
+    //   firstBytes += std::to_string(imageData[i]) + " ";
+    // }
+    // log_info(firstBytes);
     
     // 1 ) Header
     image_msg.header.stamp.sec =
@@ -321,9 +327,18 @@ void FrameBurstNode::msg_form_image_(Arena::IImage* pImage,
     std::memcpy(&image_msg.data[0], pImage->GetData(),
                 image_data_length_in_bytes);
 
-    log_info(std::string("ROS image message: ") + std::to_string(image_msg.width) + "x" + 
-             std::to_string(image_msg.height) + ", step=" + std::to_string(image_msg.step) + 
-             ", data_size=" + std::to_string(image_msg.data.size()));
+    // log_info(std::string("ROS image message: ") + std::to_string(image_msg.width) + "x" + 
+    //          std::to_string(image_msg.height) + ", step=" + std::to_string(image_msg.step) + 
+    //          ", data_size=" + std::to_string(image_msg.data.size()));
+
+    // Save image to file if folder is specified
+    if (is_passed_save_img_folder_) {
+      std::cout << "Saving image" << std::endl;
+      save_image_to_file_(pImage, image_msg);
+    }
+    else{
+      std::cout << "Image saving folder not specified. Skipping save." << std::endl;
+    }
 
   } catch (...) {
     log_warn(
@@ -532,11 +547,11 @@ void FrameBurstNode::set_nodes_frame_burst_trigger_mode_()
     log_warn(std::string("Failed to read current camera state: ") + e.what());
   }
   
-  // Enable trigger mode
-  Arena::SetNodeValue<GenICam::gcstring>(nodemap, "TriggerMode", "On");
-  
   // Set trigger selector to FrameBurstStart for burst mode
   Arena::SetNodeValue<GenICam::gcstring>(nodemap, "TriggerSelector", "FrameBurstStart");
+  
+  // Re-enable trigger mode after setting selector (some cameras reset it)
+  Arena::SetNodeValue<GenICam::gcstring>(nodemap, "TriggerMode", "On");
   
   // Set the number of frames in the burst
   Arena::SetNodeValue<int64_t>(nodemap, "AcquisitionBurstFrameCount", burst_frame_count_);
@@ -578,5 +593,114 @@ void FrameBurstNode::set_nodes_frame_burst_trigger_mode_()
     log_info(std::string("Final AcquisitionBurstFrameCount: ") + std::to_string(final_burst_count));
   } catch (GenICam::GenericException& e) {
     log_warn(std::string("Failed to read final camera state: ") + e.what());
+  }
+}
+
+void FrameBurstNode::save_image_to_file_(Arena::IImage* pImage, const sensor_msgs::msg::Image& image_msg)
+{
+  try {
+    // Create directory if it doesn't exist
+    std::filesystem::create_directories(save_img_folder_);
+    
+    // Generate timestamp-based filename
+    auto now = std::chrono::system_clock::now();
+    auto time_t = std::chrono::system_clock::to_time_t(now);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+    
+    std::ostringstream filename;
+    filename << save_img_folder_ << "/"
+             << "frame_" << std::put_time(std::localtime(&time_t), "%Y%m%d_%H%M%S")
+             << "_" << std::setfill('0') << std::setw(3) << ms.count()
+             << "_" << pImage->GetFrameId()
+             << "_" << pImage->GetWidth() << "x" << pImage->GetHeight();
+
+    std::cout << "Saving image to: " << filename.str() << std::endl;
+    
+    // Save based on pixel format
+    if (pixelformat_ros_ == "rgb8" || pixelformat_ros_ == "bgr8") {
+      save_as_ppm_(filename.str() + ".ppm", pImage);
+    } else if (pixelformat_ros_ == "mono8") {
+      save_as_pgm_(filename.str() + ".pgm", pImage);
+    } else {
+      save_as_raw_(filename.str() + ".raw", pImage);
+    }
+    
+    log_info(std::string("Image saved: ") + filename.str());
+    
+  } catch (const std::exception& e) {
+    log_warn(std::string("Failed to save image: ") + e.what());
+  }
+}
+
+void FrameBurstNode::save_as_ppm_(const std::string& filename, Arena::IImage* pImage)
+{
+  std::ofstream file(filename, std::ios::binary);
+  if (!file.is_open()) {
+    throw std::runtime_error("Could not open file for writing: " + filename);
+  }
+  
+  // PPM header
+  file << "P6\n" << pImage->GetWidth() << " " << pImage->GetHeight() << "\n255\n";
+  
+  // Write image data
+  const uint8_t* imageData = static_cast<const uint8_t*>(pImage->GetData());
+  size_t dataSize = pImage->GetWidth() * pImage->GetHeight() * 3; // RGB = 3 bytes per pixel
+  
+  if (pixelformat_ros_ == "bgr8") {
+    // Convert BGR to RGB for PPM format
+    for (size_t i = 0; i < dataSize; i += 3) {
+      file.write(reinterpret_cast<const char*>(&imageData[i + 2]), 1); // R
+      file.write(reinterpret_cast<const char*>(&imageData[i + 1]), 1); // G
+      file.write(reinterpret_cast<const char*>(&imageData[i + 0]), 1); // B
+    }
+  } else {
+    // RGB format - write directly
+    file.write(reinterpret_cast<const char*>(imageData), dataSize);
+  }
+  
+  file.close();
+}
+
+void FrameBurstNode::save_as_pgm_(const std::string& filename, Arena::IImage* pImage)
+{
+  std::ofstream file(filename, std::ios::binary);
+  if (!file.is_open()) {
+    throw std::runtime_error("Could not open file for writing: " + filename);
+  }
+  
+  // PGM header
+  file << "P5\n" << pImage->GetWidth() << " " << pImage->GetHeight() << "\n255\n";
+  
+  // Write image data
+  const uint8_t* imageData = static_cast<const uint8_t*>(pImage->GetData());
+  size_t dataSize = pImage->GetWidth() * pImage->GetHeight(); // Mono = 1 byte per pixel
+  file.write(reinterpret_cast<const char*>(imageData), dataSize);
+  
+  file.close();
+}
+
+void FrameBurstNode::save_as_raw_(const std::string& filename, Arena::IImage* pImage)
+{
+  std::ofstream file(filename, std::ios::binary);
+  if (!file.is_open()) {
+    throw std::runtime_error("Could not open file for writing: " + filename);
+  }
+  
+  // Write raw image data
+  const uint8_t* imageData = static_cast<const uint8_t*>(pImage->GetData());
+  size_t dataSize = pImage->GetSizeFilled();
+  file.write(reinterpret_cast<const char*>(imageData), dataSize);
+  
+  file.close();
+  
+  // Create accompanying info file
+  std::ofstream infoFile(filename + ".info");
+  if (infoFile.is_open()) {
+    infoFile << "Width: " << pImage->GetWidth() << "\n";
+    infoFile << "Height: " << pImage->GetHeight() << "\n";
+    infoFile << "PixelFormat: " << pixelformat_ros_ << "\n";
+    infoFile << "BitsPerPixel: " << pImage->GetBitsPerPixel() << "\n";
+    infoFile << "DataSize: " << dataSize << "\n";
+    infoFile.close();
   }
 }

@@ -73,6 +73,12 @@ ros2 run arena_camera_node frame_burst --ros-args \
   -p user_set:=UserSet1
 ```
 
+### 5. Image 저장
+```
+  ros2 run arena_camera_node frame_burst --ros-args -p software_trigger:=false -p hardware_trigger:=true -p burst_frame_count:=10 -p frame_rate:=10.0 -p save_img_folder:="/home/ailab/burst_images"
+
+``` 
+
 ## 트리거 설정 (Arena SDK에서 미리 설정 필요)
 
 ### UserSet1에 설정해야 할 항목:

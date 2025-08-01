@@ -49,6 +49,10 @@ void FrameBurstNode::parse_parameters_()
     exposure_time_ = this->declare_parameter("exposure_time", -1.0);
     is_passed_exposure_time_ = exposure_time_ >= 0;
 
+    nextParameterToDeclare = "frame_rate";
+    frame_rate_ = this->declare_parameter("frame_rate", -1.0);
+    is_passed_frame_rate_ = frame_rate_ > 0;
+
     nextParameterToDeclare = "hardware_trigger";
     hardware_trigger_ = this->declare_parameter("hardware_trigger", true);
 
@@ -436,6 +440,7 @@ void FrameBurstNode::set_nodes_()
   set_nodes_gain_();
   set_nodes_pixelformat_();
   set_nodes_exposure_();
+  set_nodes_frame_rate_();
   set_nodes_frame_burst_trigger_mode_();
   
   // configure Auto Negotiate Packet Size and Packet Resend
@@ -527,6 +532,27 @@ void FrameBurstNode::set_nodes_exposure_()
   }
 }
 
+void FrameBurstNode::set_nodes_frame_rate_()
+{
+  if (is_passed_frame_rate_) {
+    auto nodemap = m_pDevice->GetNodeMap();
+    
+    try {
+      // Enable frame rate control
+      Arena::SetNodeValue<bool>(nodemap, "AcquisitionFrameRateEnable", true);
+      
+      // Set the frame rate
+      Arena::SetNodeValue<double>(nodemap, "AcquisitionFrameRate", frame_rate_);
+      
+      log_info(std::string("\tFrame rate set to ") + std::to_string(frame_rate_) + " Hz");
+      
+    } catch (GenICam::GenericException& e) {
+      log_warn(std::string("Failed to set frame rate: ") + e.what());
+      log_warn("This camera may not support frame rate control or the value may be out of range");
+    }
+  }
+}
+
 void FrameBurstNode::set_nodes_frame_burst_trigger_mode_()
 {
   auto nodemap = m_pDevice->GetNodeMap();
@@ -602,17 +628,12 @@ void FrameBurstNode::save_image_to_file_(Arena::IImage* pImage, const sensor_msg
     // Create directory if it doesn't exist
     std::filesystem::create_directories(save_img_folder_);
     
-    // Generate timestamp-based filename
-    auto now = std::chrono::system_clock::now();
-    auto time_t = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()) % 1000;
+    // Generate timestamp-based filename with millisecond precision
+    uint64_t timestamp_ns = pImage->GetTimestampNs();
+    double timestamp_seconds = static_cast<double>(timestamp_ns) / 1000000000.0;
     
     std::ostringstream filename;
-    filename << save_img_folder_ << "/"
-             << "frame_" << std::put_time(std::localtime(&time_t), "%Y%m%d_%H%M%S")
-             << "_" << std::setfill('0') << std::setw(3) << ms.count()
-             << "_" << pImage->GetFrameId()
-             << "_" << pImage->GetWidth() << "x" << pImage->GetHeight();
+    filename << save_img_folder_ << "/" << std::fixed << std::setprecision(3) << timestamp_seconds;
 
     std::cout << "Saving image to: " << filename.str() << std::endl;
     

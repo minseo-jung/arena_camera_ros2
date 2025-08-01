@@ -63,6 +63,9 @@ class FrameBurstNode : public rclcpp::Node
   double exposure_time_;
   bool is_passed_exposure_time_;
 
+  double frame_rate_;
+  bool is_passed_frame_rate_;
+
   std::string pixelformat_pfnc_;
   std::string pixelformat_ros_;
   bool is_passed_pixelformat_ros_;
@@ -102,6 +105,7 @@ class FrameBurstNode : public rclcpp::Node
   void set_nodes_gain_();
   void set_nodes_pixelformat_();
   void set_nodes_exposure_();
+  void set_nodes_frame_rate_();
   void set_nodes_frame_burst_trigger_mode_();
   void publish_burst_images_();
 

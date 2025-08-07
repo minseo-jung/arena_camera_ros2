@@ -1,7 +1,7 @@
 # Frame Burst Node 사용법
 
 ## 개요
-Frame Burst Node는 Arena Camera에서 Frame Burst 모드를 사용하여 트리거 신호에 따라 지정된 수의 프레임을 연속으로 캡처하는 ROS2 노드입니다.
+Frame Burst Node는 Arena Camera에서 Frame Burst 모드를 사용하여 트리거 신호에 따라 지정된 수의 프레임을 연속으로 캡처하는 ROS2 노드
 
 ## 특징
 - 하드웨어 트리거 (Line0, Rising Edge) 지원
@@ -34,24 +34,38 @@ Frame Burst Node는 Arena Camera에서 Frame Burst 모드를 사용하여 트리
 
 ## 사용 예시
 
+### 0. 공통 파라미터 설명
+- serial: 사용하고자 하는 카메라의 serial number
+  - 일반 카메라 serial num: 252201462
+  - 편광 카메라 serial num: 251300291
+- hardware_trigger: hardware를 통한 pps trigger 인가 시 true, default: true
+- software_trigger: software를 통한 pps trigger 인가 시 true, default: false
+- frame rate: 취득 hz, trigger 모드 사용 시 burst_frame_count의 두배로 설정
+- burst_frame_count: 트리거가 한번 들어올 시 몇 장의 이미지를 취득할지, default: 10 
+- user_set: Window Arena SDK 에서 설정한 Setting, Default, UserSet1, UserSet2 존재, default: Default
+- topic: 노드 실행 결과 발행되는 topic 이름
+- width: 이미지 가로 (SD: 640, HD: 1280, FHD:1920), default: 1280
+- height: 이미지 세로 (SD: 480, HD: 720, FHD:1080), default: 720
+- save_img_folder: 이미지 저장 경로, 경로 지정 안할 시 저장 안함
+
 ### 1. 하드웨어 트리거 모드 (Line0, 10프레임 버스트)
 ```bash
 ros2 run arena_camera_node frame_burst --ros-args \
-  -p serial:=904240001 \
+  -p serial:={camera serial num} \
   -p hardware_trigger:=true \
   -p burst_frame_count:=10 \
-  -p user_set:=UserSet1 \
+  -p user_set:=Default \
   -p topic:=/camera/burst_images
 ```
 
 ### 2. 소프트웨어 트리거 모드
 ```bash
 ros2 run arena_camera_node frame_burst --ros-args \
-  -p serial:=904240001 \
+  -p serial:={camera serial num} \
   -p software_trigger:=true \
   -p hardware_trigger:=false \
   -p burst_frame_count:=5 \
-  -p user_set:=UserSet1
+  -p user_set:=Default
 ```
 
 ### 3. 소프트웨어 트리거 호출
@@ -62,7 +76,7 @@ ros2 service call /frame_burst_node/trigger_burst std_srvs/srv/Trigger
 ### 4. 커스텀 해상도 및 설정
 ```bash
 ros2 run arena_camera_node frame_burst --ros-args \
-  -p serial:=904240001 \
+  -p serial:={camera serial num} \
   -p width:=1920 \
   -p height:=1080 \
   -p pixelformat:=rgb8 \
@@ -74,12 +88,16 @@ ros2 run arena_camera_node frame_burst --ros-args \
 ```
 
 ### 5. Image 저장
-```
-  ros2 run arena_camera_node frame_burst --ros-args -p software_trigger:=false -p hardware_trigger:=true -p burst_frame_count:=10 -p frame_rate:=20.0 -p save_img_folder:="/home/ailab/burst_images"
-
+```bash
+  ros2 run arena_camera_node frame_burst --ros-args \
+   -p software_trigger:=false \
+   -p hardware_trigger:=true \
+   -p burst_frame_count:=10 \
+   -p frame_rate:=20.0 \
+   -p save_img_folder:="/home/ailab/burst_images"
 ``` 
 
-## 트리거 설정 (Arena SDK에서 미리 설정 필요)
+## UserSet 설정 (Window Arena SDK에서 미리 설정 필요)
 
 ### UserSet1에 설정해야 할 항목:
 1. **Trigger Selector**: FrameBurstStart
@@ -92,7 +110,7 @@ ros2 run arena_camera_node frame_burst --ros-args \
 
 ```bash
 # 터미널 1: Frame Burst Node 실행
-ros2 run arena_camera_node frame_burst --ros-args -p serial:=904240001
+ros2 run arena_camera_node frame_burst --ros-args -p serial:={camera serial num}
 
 # 터미널 2: RViz 실행
 rviz2
